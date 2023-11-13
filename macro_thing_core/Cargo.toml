@@ -1,0 +1,12 @@
+[package]
+name = "macro_thing_core"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "macro_thing_core"
+path = "src/lib.rs"
+
+[dependencies]
+inquire = { version = "0.6.2", features = ["date"] }

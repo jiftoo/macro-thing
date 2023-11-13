@@ -1,0 +1,17 @@
+[package]
+name = "macro_thing_derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "macro_thing_derive"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+inquire = { version = "0.6.2", features = ["date"] }
+proc-macro2 = "1.0.69"
+quote = "1.0.33"
+syn = { version = "2.0.39", features = ["full"] }
+macro_thing_core = { path = "../macro_thing_core" }
+strum = { version = "0.25.0", features = ["derive"] }
