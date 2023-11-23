@@ -1,29 +1,40 @@
-use macro_thing_core::{Inquire, InquireOption};
+use macro_thing_core::{Inquire, InquireOption, Question};
 use macro_thing_derive::Inquire;
 
 fn main() {
+	#[derive(Inquire, Debug)]
 	enum AddressKnowledge {
-		Registration(String),
-		LastKnown(String),
+		Registration{
+			value: String
+		},
+		LastKnown {
+			value: String
+		},
 	}
 
-	// #[derive(Inquire)]
+	#[derive(Inquire, Debug)]
 	struct Name {
+		#[question("First name")]
 		pub first: String,
+		#[question("Middle name")]
 		pub middle: InquireOption<String>,
+		#[question("Last name")]
 		pub last: String,
+		#[question("Address for some reason")]
+		pub address: AddressKnowledge,
 	}
 
-	#[derive(Inquire)]
+	#[derive(Inquire, Debug)]
 	enum Zaimodavec {
 		#[display("Physical person")]
 		Physical {
-			// #[question("Name of zaimodavec")]
-			// name: Name,
-			// #[question("Address of zaimodavec")]
-			// address: AddressKnowledge,
-			// #[question("KLADR code")]
-			// kladr: Option<String>,
+			#[question("Name of zaimodavec")]
+			name: Name,
+			#[question("Address of zaimodavec")]
+			address: AddressKnowledge,
+			#[optional]
+			#[question("KLADR code")]
+			kladr: Option<String>,
 			#[question("Birth place of zaimodavec")]
 			birth_place: String,
 		},
@@ -41,8 +52,8 @@ fn main() {
 		},
 	}
 
-	let zd = Zaimodavec::inquire("123");
-	// println!("Resulting enum: {:#?}", zd);
+	let zd = Zaimodavec::inquire("Select zaimodavec", 0);
+	println!("Resulting enum: {:#?}", zd);
 }
 
 // #[cfg(test)]

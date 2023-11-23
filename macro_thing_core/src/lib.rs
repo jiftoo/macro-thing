@@ -34,27 +34,11 @@ pub struct Question<T: Inquire> {
 }
 impl<T: Inquire> Question<T> {
 	pub fn new(message: &'static str) -> Self {
-		Self {
-			message,
-			_marker: PhantomData,
-		}
+		Self { message, _marker: PhantomData }
 	}
 
-	pub fn ask(self) -> Option<T> {
-		T::inquire(self.message)
-		// let response = inquire::CustomType::<RcStr<T>>::new(self.message)
-		// 	.with_error_message("Invalid input")
-		// 	.with_validator(|x: &RcStr<T>| {
-		// 		if x.to_string().is_empty() {
-		// 			Ok(Validation::Invalid("Input must not be empty".into()))
-		// 		} else {
-		// 			Ok(Validation::Valid)
-		// 		}
-		// 	})
-		// 	.with_parser(&|x| x)
-		// 	.prompt()
-		// 	.ok()?;
-		// Rc::into_inner(response.0)
+	pub fn ask(self, depth: usize) -> Option<T> {
+		T::inquire(self.message, depth)
 	}
 }
 
@@ -72,7 +56,8 @@ impl<T: Inquire> Question<T> {
 // 	}
 // }
 
-pub struct InquireOption<T>(Option<T>);
+#[derive(Debug)]
+pub struct InquireOption<T>(pub Option<T>);
 
 impl<T> From<Option<T>> for InquireOption<T> {
 	fn from(x: Option<T>) -> Self {
@@ -80,8 +65,14 @@ impl<T> From<Option<T>> for InquireOption<T> {
 	}
 }
 
+impl<T> InquireOption<T> {
+	pub fn into_option(self) -> Option<T> {
+		self.0
+	}
+}
+
 pub trait Inquire {
-	fn inquire(message: &str) -> Option<Self>
+	fn inquire(message: &str, depth: usize) -> Option<Self>
 	where
 		Self: Sized;
 }
@@ -91,39 +82,43 @@ where
 	T: FromStr + ToString,
 	T::Err: Debug,
 {
-	fn inquire(question: &str) -> Option<Self> {
-		let response = inquire::CustomType::<RcStr<T>>::new(question)
-			.with_error_message("Invalid input")
-			.with_validator(|x: &RcStr<T>| {
-				if x.to_string().is_empty() {
-					Ok(Validation::Invalid("Input must not be empty".into()))
-				} else {
-					Ok(Validation::Valid)
-				}
-			})
-			.prompt()
-			.ok()?;
-		Rc::into_inner(response.0)
+	fn inquire(question: &str, depth: usize) -> Option<Self> {
+		let response = inquire::CustomType::<RcStr<T>>::new(&format!(
+			"{}{}",
+			"-".repeat(depth - 1),
+			question
+		))
+		.with_error_message("Invalid input")
+		.with_validator(|x: &RcStr<T>| {
+			if x.to_string().is_empty() {
+				Ok(Validation::Invalid("Input must not be empty".into()))
+			} else {
+				Ok(Validation::Valid)
+			}
+		})
+		.prompt()
+		.ok()?;
+		Some(Rc::into_inner(response.0).unwrap())
 	}
 }
 
 impl<T> Inquire for InquireOption<T>
 where
-	T: FromStr + ToString,
+	T: FromStr + ToString + Debug,
 	T::Err: Debug,
 {
-	fn inquire(question: &str) -> Option<Self> {
-		let response = inquire::CustomType::<RcStr<T>>::new(question)
-			.with_error_message("Invalid input")
-			.with_validator(|x: &RcStr<T>| {
-				if x.to_string().is_empty() {
-					Ok(Validation::Invalid("Input must not be empty".into()))
-				} else {
-					Ok(Validation::Valid)
-				}
-			})
-			.prompt_skippable()
-			.ok()?;
-		response.map(|x| Rc::into_inner(x.0).into())
+	fn inquire(question: &str, depth: usize) -> Option<Self> {
+		let response = inquire::CustomType::<RcStr<T>>::new(&format!(
+			"{}{}",
+			"-".repeat(depth),
+			question
+		))
+		.with_error_message("Invalid input")
+		.prompt_skippable()
+		.ok()?
+		// just hitting enter should also return None
+		.and_then(|x| if x.to_string().is_empty() { None } else { Some(x) });
+
+		Some(response.map(|x| Rc::into_inner(x.0).unwrap()).into())
 	}
 }
