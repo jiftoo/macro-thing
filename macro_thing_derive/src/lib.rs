@@ -5,15 +5,22 @@ use std::collections::HashMap;
 
 use macro_thing_core::Question;
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, TokenTree};
-use quote::{format_ident, quote};
+use proc_macro2::{Ident, Literal, Span, TokenTree};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
-	parse, parse_macro_input, parse_quote, Attribute, DeriveInput, ItemEnum, ItemStruct, LitStr,
-	Path, Token, Type,
+	parse, parse_macro_input, parse_quote, spanned::Spanned, Attribute, DeriveInput, ItemEnum,
+	ItemStruct, Lit, LitInt, LitStr, Path, Token, Type,
 };
 
 #[derive(Debug, Clone)]
+enum FieldKind {
+	Named,
+	Tuple,
+}
+
+#[derive(Debug, Clone)]
 struct FieldConfig {
+	kind: FieldKind,
 	question: String,
 	optional: bool,
 }
@@ -42,7 +49,13 @@ fn expand_struct_from_item_struct(item_struct: ItemStruct) -> TokenStream {
 	let questions: Vec<_> = fields
 		.iter()
 		.map(|field| {
-			let field_ident = field.ident.as_ref().cloned().expect("Tuple structs not supported");
+			// let field_ident = field.ident.as_ref().cloned().expect("Tuple structs not supported");
+			let (field_ident, field_kind) = {
+				match field.ident.as_ref().cloned() {
+					Some(x) => (x, FieldKind::Named),
+					None => (format_ident!("value"), FieldKind::Tuple),
+				}
+			};
 
 			// fields allow an #[optional] attribute
 			let optional = field.attrs.iter().find(|x| x.path().is_ident("optional")).is_some();
@@ -53,6 +66,7 @@ fn expand_struct_from_item_struct(item_struct: ItemStruct) -> TokenStream {
 				(
 					field_ident,
 					FieldConfig {
+						kind: field_kind,
 						question: custom_question,
 						optional,
 					},
@@ -62,6 +76,7 @@ fn expand_struct_from_item_struct(item_struct: ItemStruct) -> TokenStream {
 				(
 					field_ident,
 					FieldConfig {
+						kind: field_kind,
 						question: default_question,
 						optional,
 					},
@@ -118,7 +133,13 @@ fn expand_enum(
 		for field in variant.fields.iter() {
 			let questions_for_variant = questions.entry(variant).or_insert(Vec::new());
 
-			let field_ident = field.ident.as_ref().cloned().expect("Tuple structs not supported");
+			// let field_ident = field.ident.as_ref().cloned().expect("Tuple structs not supported");
+			let (field_ident, field_kind) = {
+				match field.ident.as_ref().cloned() {
+					Some(x) => (x, FieldKind::Named),
+					None => (format_ident!("value"), FieldKind::Tuple),
+				}
+			};
 
 			// fields allow an #[optional] attribute
 			let optional = field.attrs.iter().find(|x| x.path().is_ident("optional")).is_some();
@@ -129,6 +150,7 @@ fn expand_enum(
 				questions_for_variant.push((
 					field_ident,
 					FieldConfig {
+						kind: field_kind,
 						question: custom_question,
 						optional,
 					},
@@ -138,6 +160,7 @@ fn expand_enum(
 				questions_for_variant.push((
 					field_ident,
 					FieldConfig {
+						kind: field_kind,
 						question: default_question,
 						optional,
 					},
@@ -199,7 +222,8 @@ fn expand_struct(
 				(
 					field_ident,
 					ref cfg @ FieldConfig {
-						ref question,
+						ref kind,
+						question: _,
 						optional,
 					},
 				),
@@ -210,7 +234,16 @@ fn expand_struct(
 				} else {
 					parse_quote!(_)
 				};
+
 				let into_inner_call = optional.then(|| quote! {.into_inner()});
+
+				let field_ident = match kind {
+					FieldKind::Named => field_ident.into_token_stream(),
+					FieldKind::Tuple => {
+						LitInt::new(&i.to_string(), Span::call_site()).into_token_stream()
+					}
+				};
+
 				let question_statement = quote! {
 					#field_ident: {
 						#depth_counter_ident += 1;
@@ -219,6 +252,7 @@ fn expand_struct(
 						ans
 					}
 				};
+
 				question_statement
 			},
 		)

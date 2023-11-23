@@ -104,4 +104,11 @@
 // // 	}
 // // }
 
-fn main() {}
+// use macro_thing::Inquire;
+
+fn main() {
+	// #[derive(Inquire)]
+	// enum Test {
+	// 	A(String),
+	// }
+}

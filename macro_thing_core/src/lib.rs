@@ -1,9 +1,11 @@
 use std::{borrow::Cow, fmt::Debug, marker::PhantomData, rc::Rc, str::FromStr};
 
+use chrono::Datelike;
 use inquire::{
 	error::InquireResult,
 	required,
-	validator::{Validation, ValueRequiredValidator}, CustomUserError,
+	validator::{Validation, ValueRequiredValidator},
+	CustomUserError,
 };
 
 pub use inquire;
@@ -35,7 +37,10 @@ pub struct Question<T: Inquire> {
 }
 impl<T: Inquire> Question<T> {
 	pub fn new(message: &'static str) -> Self {
-		Self { message, _marker: PhantomData }
+		Self {
+			message,
+			_marker: PhantomData,
+		}
 	}
 
 	pub fn ask(self, depth: usize) -> Option<T> {
@@ -44,7 +49,7 @@ impl<T: Inquire> Question<T> {
 }
 
 pub trait Inquire {
-	fn inquire(message: &str, depth: usize) -> Option<Self>
+	fn inquire(question: &str, depth: usize) -> Option<Self>
 	where
 		Self: Sized;
 }
@@ -122,21 +127,18 @@ impl<T: Clone + FromStr + ToString + 'static> InquireHelper<T> {
 
 impl Inquire for String {
 	fn inquire(question: &str, depth: usize) -> Option<Self> {
-		let response = inquire::CustomType::<String>::new(&format!(
-			"{}{}:",
-			"-".repeat(depth - 1),
-			question
-		))
-		.with_error_message("Invalid input")
-		.with_validator(|x: &String| {
-			if x.to_string().is_empty() {
-				Ok(Validation::Invalid("Input must not be empty".into()))
-			} else {
-				Ok(Validation::Valid)
-			}
-		})
-		.prompt()
-		.ok()?;
+		let response =
+			inquire::CustomType::<String>::new(&format!("{}{}:", "-".repeat(depth - 1), question))
+				.with_error_message("Invalid input")
+				.with_validator(|x: &String| {
+					if x.to_string().is_empty() {
+						Ok(Validation::Invalid("Input must not be empty".into()))
+					} else {
+						Ok(Validation::Valid)
+					}
+				})
+				.prompt()
+				.ok()?;
 		Some(response)
 	}
 }
@@ -152,7 +154,13 @@ impl<T: ToString + FromStr> Inquire for Option<T> {
 		.prompt_skippable()
 		.ok()?
 		// just hitting enter should also return None
-		.and_then(|x| if x.to_string().is_empty() { None } else { Some(x) });
+		.and_then(|x| {
+			if x.to_string().is_empty() {
+				None
+			} else {
+				Some(x)
+			}
+		});
 
 		Some(response.map(|x| Rc::into_inner(x.0).unwrap()))
 	}
@@ -172,5 +180,21 @@ impl<T: ToString + FromStr + Default> Inquire for InquireOrDefault<T> {
 impl<T: ToString + FromStr> InquireOrDefault<T> {
 	pub fn into_inner(self) -> T {
 		self.0
+	}
+}
+
+impl Inquire for time::Date {
+	fn inquire(question: &str, _depth: usize) -> Option<Self>
+	where
+		Self: Sized,
+	{
+		inquire::DateSelect::new(question).prompt().ok().map(|x| {
+			time::Date::from_calendar_date(
+				x.year(),
+				(x.month() as u8).try_into().unwrap(),
+				x.day() as u8,
+			)
+			.unwrap()
+		})
 	}
 }

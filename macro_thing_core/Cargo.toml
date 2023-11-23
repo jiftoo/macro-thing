@@ -9,4 +9,6 @@ name = "macro_thing_core"
 path = "src/lib.rs"
 
 [dependencies]
+chrono = "0.4.31"
 inquire = { version = "0.6.2", features = ["date"] }
+time = { version = "0.3.30" }
