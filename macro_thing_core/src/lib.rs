@@ -1,8 +1,9 @@
-use std::{fmt::Debug, marker::PhantomData, rc::Rc, str::FromStr};
+use std::{borrow::Cow, fmt::Debug, marker::PhantomData, rc::Rc, str::FromStr};
 
 use inquire::{
+	error::InquireResult,
 	required,
-	validator::{Validation, ValueRequiredValidator},
+	validator::{Validation, ValueRequiredValidator}, CustomUserError,
 };
 
 pub use inquire;
@@ -34,10 +35,7 @@ pub struct Question<T: Inquire> {
 }
 impl<T: Inquire> Question<T> {
 	pub fn new(message: &'static str) -> Self {
-		Self {
-			message,
-			_marker: PhantomData,
-		}
+		Self { message, _marker: PhantomData }
 	}
 
 	pub fn ask(self, depth: usize) -> Option<T> {
@@ -51,20 +49,94 @@ pub trait Inquire {
 		Self: Sized;
 }
 
+pub enum InqureKind {
+	Custom,
+	Text,
+}
+
+pub struct InquireHelper<T> {
+	question: String,
+	depth: usize,
+	error: String,
+	validator: Box<dyn inquire::validator::CustomTypeValidator<T>>,
+	optional: bool,
+}
+
+impl<T: Clone + FromStr + ToString + 'static> InquireHelper<T> {
+	pub fn new(question: &str, depth: usize) -> Self {
+		Self {
+			question: question.into(),
+			depth,
+			error: "Invalid input".into(),
+			validator: Box::new(|x: &T| {
+				if x.to_string().is_empty() {
+					Ok(Validation::Invalid("Input must not be empty".into()))
+				} else {
+					Ok(Validation::Valid)
+				}
+			}),
+			optional: false,
+		}
+	}
+
+	pub fn optional(mut self) -> Self {
+		self.optional = true;
+		self.validator = Box::new(|x: &T| Ok(Validation::Valid));
+		self
+	}
+
+	pub fn with_error_message(mut self, error: &str) -> Self {
+		self.error = error.into();
+		self
+	}
+
+	pub fn with_validator<F: 'static + Clone>(mut self, validator: F) -> Self
+	where
+		F: Fn(&T) -> Result<Validation, CustomUserError>,
+	{
+		self.validator = Box::new(validator);
+		self
+	}
+
+	pub fn prompt(self) -> InquireResult<T> {
+		let message = if self.optional {
+			Self::format_question_optional(&self.question, self.depth)
+		} else {
+			Self::format_question(&self.question, self.depth)
+		};
+
+		inquire::CustomType::<T>::new(&message)
+			.with_error_message(&self.error)
+			.with_validator(move |x: &_| self.validator.validate(x))
+			.prompt()
+	}
+
+	fn format_question(question: &str, depth: usize) -> String {
+		format!("{}{}:", "-".repeat(depth - 1), question)
+	}
+
+	fn format_question_optional(question: &str, depth: usize) -> String {
+		format!("{} [optional] {}:", "-".repeat(depth - 1), question)
+	}
+}
+
 impl Inquire for String {
 	fn inquire(question: &str, depth: usize) -> Option<Self> {
-		let response =
-			inquire::CustomType::<String>::new(&format!("{}{}:", "-".repeat(depth - 1), question))
-				.with_error_message("Invalid input")
-				.with_validator(|x: &String| {
-					if x.to_string().is_empty() {
-						Ok(Validation::Invalid("Input must not be empty".into()))
-					} else {
-						Ok(Validation::Valid)
-					}
-				})
-				.prompt()
-				.ok()?;
+		let response = inquire::CustomType::<String>::new(&format!(
+			"{}{}:",
+			"-".repeat(depth - 1),
+			question
+		))
+		.with_error_message("Invalid input")
+		.with_validator(|x: &String| {
+			if x.to_string().is_empty() {
+				Ok(Validation::Invalid("Input must not be empty".into()))
+			} else {
+				Ok(Validation::Valid)
+			}
+		})
+		.prompt()
+		.ok()?;
 		Some(response)
 	}
 }
@@ -80,13 +152,7 @@ impl<T: ToString + FromStr> Inquire for Option<T> {
 		.prompt_skippable()
 		.ok()?
 		// just hitting enter should also return None
-		.and_then(|x| {
-			if x.to_string().is_empty() {
-				None
-			} else {
-				Some(x)
-			}
-		});
+		.and_then(|x| if x.to_string().is_empty() { None } else { Some(x) });
 
 		Some(response.map(|x| Rc::into_inner(x.0).unwrap()))
 	}

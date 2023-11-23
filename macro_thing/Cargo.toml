@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-# [lib]
-# name = "macro_thing"
-# path = "src/lib.rs"
+[lib]
+name = "macro_thing"
+path = "src/lib.rs"
 
 [dependencies]
 macro_thing_core = { path = "../macro_thing_core" }

@@ -76,7 +76,6 @@ fn expand_struct_from_item_struct(item_struct: ItemStruct) -> TokenStream {
 	quote! {
 		impl Inquire for #ident {
 			fn inquire(question: &str, mut #depth_counter_ident: usize) -> Option<Self> {
-				use ::macro_thing_core::*;
 				#struct_tokens
 			}
 		}
@@ -172,7 +171,6 @@ fn expand_enum(
 	quote! {
 		impl Inquire for #main_ident {
 			fn inquire(question: &str, mut #depth_counter_ident: usize) -> Option<Self> {
-				use ::macro_thing_core::*;
 				use #main_ident::*;
 				let chosen_variant = inquire::Select::new(question, [#(#variant_idents),*].to_vec()).prompt().ok()?;
 				match chosen_variant {
@@ -216,7 +214,7 @@ fn expand_struct(
 				let question_statement = quote! {
 					#field_ident: {
 						#depth_counter_ident += 1;
-						let ans = Question::<#type_param>::new(#question).ask(#depth_counter_ident)?#into_inner_call;
+						let ans = ::macro_thing::Question::<#type_param>::new(#question).ask(#depth_counter_ident)?#into_inner_call;
 						#depth_counter_ident -= 1;
 						ans
 					}
