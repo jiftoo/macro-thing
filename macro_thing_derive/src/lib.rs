@@ -8,8 +8,8 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, TokenTree};
 use quote::{format_ident, quote};
 use syn::{
-	parse, parse_macro_input, parse_quote, Attribute, DeriveInput, ItemEnum, ItemStruct,
-	LitStr, Path, Token, Type,
+	parse, parse_macro_input, parse_quote, Attribute, DeriveInput, ItemEnum, ItemStruct, LitStr,
+	Path, Token, Type,
 };
 
 #[derive(Debug, Clone)]
@@ -20,19 +20,7 @@ struct FieldConfig {
 
 impl FieldConfig {
 	fn format_question(&self, question_idx: usize, question_max: usize) -> String {
-		format!(
-			"({} of {}) {}{}:",
-			question_idx + 1,
-			question_max,
-			{
-				if self.optional {
-					"[optional] "
-				} else {
-					""
-				}
-			},
-			self.question
-		)
+		format!("({} of {}) {}", question_idx + 1, question_max, self.question)
 	}
 }
 
@@ -54,22 +42,30 @@ fn expand_struct_from_item_struct(item_struct: ItemStruct) -> TokenStream {
 	let questions: Vec<_> = fields
 		.iter()
 		.map(|field| {
-			let field_ident =
-				field.ident.as_ref().cloned().expect("Tuple structs not supported");
+			let field_ident = field.ident.as_ref().cloned().expect("Tuple structs not supported");
 
 			// fields allow an #[optional] attribute
-			let optional =
-				field.attrs.iter().find(|x| x.path().is_ident("optional")).is_some();
+			let optional = field.attrs.iter().find(|x| x.path().is_ident("optional")).is_some();
 
 			// and a #[question] attribute
-			if let Some(question) =
-				field.attrs.iter().find(|x| x.path().is_ident("question"))
-			{
+			if let Some(question) = field.attrs.iter().find(|x| x.path().is_ident("question")) {
 				let custom_question = question.parse_args::<LitStr>().unwrap().value();
-				(field_ident, FieldConfig { question: custom_question, optional })
+				(
+					field_ident,
+					FieldConfig {
+						question: custom_question,
+						optional,
+					},
+				)
 			} else {
 				let default_question = field_ident.to_string();
-				(field_ident, FieldConfig { question: default_question, optional })
+				(
+					field_ident,
+					FieldConfig {
+						question: default_question,
+						optional,
+					},
+				)
 			}
 		})
 		.collect();
@@ -88,15 +84,20 @@ fn expand_struct_from_item_struct(item_struct: ItemStruct) -> TokenStream {
 	.into()
 }
 
-fn expand_enum(ItemEnum { ident: main_ident, variants, .. }: ItemEnum) -> TokenStream {
+fn expand_enum(
+	ItemEnum {
+		ident: main_ident,
+		variants,
+		..
+	}: ItemEnum,
+) -> TokenStream {
 	// Map of variants renamed with #[display] attribute
 	let mut renamed_variants = HashMap::new();
 
 	// Populate the map
 	for variant in &variants {
 		// variants allow a #[display] attribute
-		if let Some(display) = variant.attrs.iter().find(|x| x.path().is_ident("display"))
-		{
+		if let Some(display) = variant.attrs.iter().find(|x| x.path().is_ident("display")) {
 			let display_as = display.parse_args::<LitStr>().unwrap().value();
 			renamed_variants.insert(&variant.ident, display_as);
 		}
@@ -118,27 +119,29 @@ fn expand_enum(ItemEnum { ident: main_ident, variants, .. }: ItemEnum) -> TokenS
 		for field in variant.fields.iter() {
 			let questions_for_variant = questions.entry(variant).or_insert(Vec::new());
 
-			let field_ident =
-				field.ident.as_ref().cloned().expect("Tuple structs not supported");
+			let field_ident = field.ident.as_ref().cloned().expect("Tuple structs not supported");
 
 			// fields allow an #[optional] attribute
-			let optional =
-				field.attrs.iter().find(|x| x.path().is_ident("optional")).is_some();
+			let optional = field.attrs.iter().find(|x| x.path().is_ident("optional")).is_some();
 
 			// and a #[question] attribute
-			if let Some(question) =
-				field.attrs.iter().find(|x| x.path().is_ident("question"))
-			{
+			if let Some(question) = field.attrs.iter().find(|x| x.path().is_ident("question")) {
 				let custom_question = question.parse_args::<LitStr>().unwrap().value();
 				questions_for_variant.push((
 					field_ident,
-					FieldConfig { question: custom_question, optional },
+					FieldConfig {
+						question: custom_question,
+						optional,
+					},
 				));
 			} else {
 				let default_question = field_ident.to_string();
 				questions_for_variant.push((
 					field_ident,
-					FieldConfig { question: default_question, optional },
+					FieldConfig {
+						question: default_question,
+						optional,
+					},
 				));
 			}
 		}
@@ -153,10 +156,8 @@ fn expand_enum(ItemEnum { ident: main_ident, variants, .. }: ItemEnum) -> TokenS
 				.unwrap_or_else(|| original_variant.ident.to_string());
 
 			let original_variant_ident = &original_variant.ident;
-			let struct_tokens = expand_struct(
-				parse_quote!(#main_ident::#original_variant_ident),
-				questions,
-			);
+			let struct_tokens =
+				expand_struct(parse_quote!(#main_ident::#original_variant_ident), questions);
 
 			quote! {
 				#renamed_variant => {
@@ -166,7 +167,7 @@ fn expand_enum(ItemEnum { ident: main_ident, variants, .. }: ItemEnum) -> TokenS
 		})
 		.collect::<Vec<_>>();
 
-		let depth_counter_ident = format_ident!("{DEPTH_COUNTER_IDENT}");
+	let depth_counter_ident = format_ident!("{DEPTH_COUNTER_IDENT}");
 
 	quote! {
 		impl Inquire for #main_ident {
@@ -194,21 +195,35 @@ fn expand_struct(
 	let statements: Vec<_> = questions
 		.into_iter()
 		.enumerate()
-		.map(|(i, (field_ident, ref cfg @ FieldConfig { ref question, optional }))| {
-			let question = cfg.format_question(i, total_questions);
-			let type_param: Type =
-				if optional { parse_quote!(InquireOption<_>) } else { parse_quote!(_) };
-			let into_option_call = optional.then(|| quote! {.into_option()});
-			let question_statement = quote! {
-				#field_ident: {
-					#depth_counter_ident += 1;
-					let ans = Question::<#type_param>::new(#question).ask(#depth_counter_ident)?#into_option_call;
-					#depth_counter_ident -= 1;
-					ans
-				}
-			};
-			question_statement
-		})
+		.map(
+			|(
+				i,
+				(
+					field_ident,
+					ref cfg @ FieldConfig {
+						ref question,
+						optional,
+					},
+				),
+			)| {
+				let question = cfg.format_question(i, total_questions);
+				let type_param: Type = if optional {
+					parse_quote!(InquireOrDefault<_>)
+				} else {
+					parse_quote!(_)
+				};
+				let into_inner_call = optional.then(|| quote! {.into_inner()});
+				let question_statement = quote! {
+					#field_ident: {
+						#depth_counter_ident += 1;
+						let ans = Question::<#type_param>::new(#question).ask(#depth_counter_ident)?#into_inner_call;
+						#depth_counter_ident -= 1;
+						ans
+					}
+				};
+				question_statement
+			},
+		)
 		.collect();
 
 	quote! {

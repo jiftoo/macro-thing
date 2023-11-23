@@ -1,4 +1,4 @@
-use macro_thing_core::{Inquire, InquireOption, Question};
+use macro_thing_core::{Inquire, Question, InquireOrDefault};
 use macro_thing_derive::Inquire;
 
 fn main() {
@@ -17,7 +17,7 @@ fn main() {
 		#[question("First name")]
 		pub first: String,
 		#[question("Middle name")]
-		pub middle: InquireOption<String>,
+		pub middle: Option<String>,
 		#[question("Last name")]
 		pub last: String,
 		#[question("Address for some reason")]
@@ -34,7 +34,7 @@ fn main() {
 			address: AddressKnowledge,
 			#[optional]
 			#[question("KLADR code")]
-			kladr: Option<String>,
+			kladr: String,
 			#[question("Birth place of zaimodavec")]
 			birth_place: String,
 		},
